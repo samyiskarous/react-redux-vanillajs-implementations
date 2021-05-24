@@ -1,2 +1,2 @@
-# redux-store-vanilajs
-### A Redux Store built from scratch using Vanilla JS
+# Redux & React Vanilla JS implementations
+A Vanilla JS implementations to Redux Store and React-Redux Library (Provider, connect() function)
