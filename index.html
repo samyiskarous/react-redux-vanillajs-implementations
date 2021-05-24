@@ -5,24 +5,383 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Document</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/redux/3.7.2/redux.min.js"></script>
+    <script src="https://unpkg.com/react@16.7.0-alpha.0/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@16.7.0-alpha.0/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/babel-standalone@6.15.0/babel.min.js"></script>
+    <script src="https://tylermcginnis.com/goals-todos-api/index.js"></script>
+    <script src="https://unpkg.com/redux-thunk@2.2.0/dist/redux-thunk.min.js"></script>
 
 </head>
     <body>
-        <h1>Todo List</h1>
-        <input type="text" id="todoItem" placeholder="Todo Text"/>
-        <button id="todoBtn">Add Todo</button>
+        <div id="app"></div>
 
-        <h4>Todo Items</h4>
-        <ul id="todoList"></ul>
+        <script type="text/babel">
 
-        <h1>Goals List</h1>
-        <input type="text" id="goalItem" placeholder="Goal Text"/>
-        <button id="goalBtn">Add Goal</button>
+            // App Code
+            const ADD_TODO = 'ADD_TODO'
+            const REMOVE_TODO = 'REMOVE_TODO'
+            const TOGGLE_TODO = 'TOGGLE_TODO'
+            const ADD_GOAL = 'ADD_GOAL'
+            const REMOVE_GOAL = 'REMOVE_GOAL'
+            const RECEIVE_DATA = 'RECEIVE_DATA'
 
-        <h4>Goals Items</h4>
-        <ul id="goalsList"></ul>
+            const todoActionsCreator = {
+                handleAdd: (todoItemName, removeTodoNameCallBack) => {
+                    return (dispatch) => {
+                        API.saveTodo(todoItemName)
+                            .then((newTodoItem) => {
+                                dispatch(todoActionsCreator.add(newTodoItem));
+
+                                removeTodoNameCallBack();
+                            })
+                            .catch(() => {
+                                alert('An error occurred. Try again.');
+                            })
+                    }
+                },
+                add: (todo) => ({
+                    type: ADD_TODO,
+                    todo,
+                }),
+                handleRemove: (todoItem) => {
+                    return (dispatch) => {
+                            dispatch(todoActionsCreator.remove(todoItem.id));
+    
+                            API.deleteTodo(todoItem.id)
+                                .catch(() => {
+                                    dispatch(todoActionsCreator.add(todoItem));
+                                    alert('An error has been occurred, Item is not deleted.');
+                                });
+                        }
+                },
+                remove: (id) => ({
+                    type: REMOVE_TODO,
+                    id,
+                }),
+                toggle: (id) => ({
+                    type: TOGGLE_TODO,
+                    id,
+                }),
+            }
 
 
-        <script src="./index.js"></script>
+            const goalActionsCreator = {
+                handleAdd: (goalItemName, removeGoalNameCallBack) => {
+                    return (dispatch) => {
+                        API.saveTodo(goalItemName)
+                            .then((newGoalItem) => {
+                                dispatch(goalActionsCreator.add(newGoalItem));
+
+                                removeGoalNameCallBack();
+                            })
+                            .catch(() => {
+                                alert('An error occurred. Try again.');
+                            })
+                    }
+                },
+                add: (goal) => ({
+                    type: ADD_GOAL,
+                    goal,
+                }),
+                handleRemove: (goalItem) => {
+                    return (dispatch) => {
+                            dispatch(goalActionsCreator.remove(goalItem.id));
+    
+                            API.deleteGoal(goalItem.id)
+                                .catch(() => {
+                                    dispatch(goalActionsCreator.add(goalItem));
+                                    alert('An error has been occurred, Item is not deleted.');
+                                });
+                        }
+                },
+                remove: (id) => ({
+                    type: REMOVE_GOAL,
+                    id,
+                }),
+            }
+
+            const handleReceivingDataAction = () => {
+                return (dispatch) => {
+                    Promise.all([
+                        API.fetchTodos(),
+                        API.fetchGoals()
+                    ]).then(([todos, goals]) => {
+                        dispatch(receiveDataAction(todos, goals));
+                    })
+                }
+            }
+
+            const receiveDataAction = (todos, goals) => {
+                return {
+                    type: RECEIVE_DATA,
+                    todos,
+                    goals
+                }
+            }
+
+            const todosReducer = (state = [], action) => {
+                switch(action.type) {
+                case ADD_TODO :
+                    return state.concat([action.todo])
+                case REMOVE_TODO :
+                    return state.filter((todo) => todo.id !== action.id)
+                case TOGGLE_TODO :
+                    return state.map((todo) => todo.id !== action.id ? todo :
+                    Object.assign({}, todo, { complete: !todo.complete }))
+                case RECEIVE_DATA : 
+                    return action.todos
+                default :
+                    return state
+                }
+            }
+
+            const goalsReducer = (state = [], action) => {
+                switch(action.type) {
+                case ADD_GOAL :
+                    return state.concat([action.goal])
+                case REMOVE_GOAL :
+                    return state.filter((goal) => goal.id !== action.id)
+                case RECEIVE_DATA : 
+                    return action.goals
+                default :
+                    return state
+                }
+            }
+
+            const loadingReducer = (state = true, action) => {
+                switch(action.type){
+                    case RECEIVE_DATA:
+                        return false;
+                    default:
+                        return state;
+                }
+            }
+
+            const checkTextMiddleware = (store) => (next) => (action) => {
+                if(
+                    action.type === ADD_TODO &&
+                    action.todo.name.toLowerCase().includes('bitcoin')    
+                )
+                    return alert('nice try!');
+                if(
+                    action.type === ADD_GOAL &&
+                    action.goal.name.toLowerCase().includes('bitcoin')    
+                )
+                    return alert('nice try!');
+
+                return next(action);
+            }
+
+            const loggerMiddleware = (store) => (next) => (action) => {
+                console.group(action.type);
+                    console.log('Action: ', action);
+                    const invokeNextAction = next(action);
+                    console.log('New State: ', store.getState());
+                console.groupEnd();
+
+                return invokeNextAction;
+            }
+
+            const displayFeedbackMiddleware = (store) => (next) => (action) => {
+                if(action.type === ADD_TODO)
+                    alert("Don't forget to " + action.todo.name);
+                else if(action.type === ADD_GOAL)
+                    alert("That's a great goal!");
+
+                next(action);
+            }
+
+            const store = Redux.createStore(Redux.combineReducers({
+                todos: todosReducer,
+                goals: goalsReducer,
+                loading: loadingReducer
+            }), Redux.applyMiddleware(ReduxThunk.default, checkTextMiddleware, loggerMiddleware))
+
+        </script>
+
+        <script type="text/babel">
+
+
+            const Context = React.createContext();
+
+            const Provider = (props) => {
+                return (
+                    <Context.Provider value={props.store}>
+                        {props.children}
+                    </Context.Provider>
+                );
+            }
+
+            const connect = (mapStateToProps) => {
+                return (ComponentToConnect) => {
+
+                    class Receiver extends React.Component {
+                        componentDidMount(){
+                            const {subscribe} = this.props.store;
+
+                            this.unsubscribe = subscribe(() => {
+                                this.forceUpdate();
+                            });
+
+                        }
+
+                        componentWillUnmount(){
+                            this.unsubscribe();
+                        }
+
+                        render() {
+                            const {getState, dispatch} = this.props.store;
+                            const neededProps = mapStateToProps(getState());
+
+                            return (
+                                <ComponentToConnect {...neededProps} dispatch={dispatch}/>
+                            );
+                        }
+                    }
+
+                    const ConnectedComponent = () => {
+                        return (
+                            <Context.Consumer>
+                                {(store) => <Receiver store={store}/>}
+                            </Context.Consumer>
+                        );
+                    }
+
+                    return ConnectedComponent;
+                }
+            }
+
+            const List = (props) => {
+                const {items, removeItem} = props;
+
+                return (
+                    <ul>
+                        {items.map((item, index) => {
+                            return (
+                                <li key={item.id}>
+                                    <span>{item.name}</span>    
+                                    <button onClick={() => removeItem(item)}>x</button>
+                                </li>
+                            );
+                        })}
+                    </ul>
+                );
+            }
+
+            const Todos = (props) => {
+                const {todos, dispatch} = props;
+                let inputElement = null;
+
+                const addItem = (event) => {
+                    event.preventDefault();
+                    const name = inputElement.value;
+
+                    dispatch(todoActionsCreator.handleAdd(
+                        name,
+                        () => inputElement.value = "" 
+                    ));
+                }
+
+                const removeTodoItemHandler = (todoItem) => {
+                    dispatch(todoActionsCreator.handleRemove(todoItem));
+                }
+
+                return (
+                    <div>
+                        <h1>Todo List</h1>
+                        <input 
+                            type="text"
+                            placeholder="Add a Todo"
+                            ref={(input) => inputElement = input}
+                        />
+                        <button onClick={addItem}>Add Todo</button>
+                        <List items={todos} removeItem={removeTodoItemHandler}/>
+                    </div>
+                );
+            }
+
+            const ConnectedTodos = connect((state) => ({
+                todos: state.todos
+            }))(Todos);
+
+            const Goals = (props) => {
+                const {goals, dispatch} = props;
+
+                let inputElement = null;
+
+                const addItem = (event) => {
+                    const name = inputElement.value;
+                    dispatch(goalActionsCreator.handleAdd(
+                        name,
+                        () => inputElement.value = ""
+                    ));
+                }
+
+                const removeGoalItemHandler = (goalItem) => {
+                    dispatch(goalActionsCreator.handleRemove(goalItem));
+                }
+
+                return (
+                    <div>
+                        <h1>Goals List</h1>
+                        <input 
+                            type="text"
+                            placeholder="Add a Goal"
+                            ref={(input) => inputElement = input}
+                        />
+                        <button onClick={addItem}>Add Goal</button>
+                        <List items={goals} removeItem={removeGoalItemHandler}/>
+                    </div>
+                );
+            }
+
+            const ConnectedGoals = connect((state) => {
+                return {
+                    goals: state.goals
+                }
+            })(Goals);
+
+            const App = (props) => {
+                React.useEffect(() => {
+                    const { dispatch } = props
+
+                    dispatch(handleReceivingDataAction())
+                }, []); 
+                
+                if(props.loading){
+                    return <h2>LOADING...</h2>;
+                }
+
+                return ( 
+                    <div>
+                        <ConnectedTodos/>
+                        <ConnectedGoals/>
+                    </div>
+                );
+            }   
+
+            const ConnectedApp = connect((state) => {
+                return {
+                    loading: state.loading
+                }
+            })(App);
+
+            // const ConnectedApp = () => {
+            //     return (
+            //         <Context.Consumer>
+            //             {(store) => <App store={store}/>}
+            //         </Context.Consumer>
+            //     );
+            // }
+
+            ReactDOM.render(
+                <Provider store={store}>
+                    <ConnectedApp/>
+                </Provider>,
+                document.getElementById('app')
+            );
+        </script>
     </body>
 </html>
